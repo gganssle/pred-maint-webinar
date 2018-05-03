@@ -55,7 +55,6 @@ norm_train_df = pd.DataFrame(min_max_scaler.fit_transform(train_df[cols_normaliz
 join_df = train_df[train_df.columns.difference(cols_normalize)].join(norm_train_df)
 train_df = join_df.reindex(columns = train_df.columns)
 
-
 test_df['cycle_norm'] = test_df['cycle']
 norm_test_df = pd.DataFrame(min_max_scaler.transform(test_df[cols_normalize]),
                             columns=cols_normalize,
@@ -103,9 +102,7 @@ plt.show()
 
 # function to reshape features into (samples, time steps, features)
 def gen_sequence(id_df, seq_length, seq_cols):
-    """ Only sequences that meet the window-length are considered, no padding is used. This means for testing
-    we need to drop those which are below the window-length. An alternative would be to pad sequences so that
-    we can use shorter ones """
+    """ Only sequences that meet the window-length are considered, no padding is used. This means for testing we need to drop those which are below the window-length. An alternative would be to pad sequences so that we can use shorter ones """
     data_array = id_df[seq_cols].values
     num_elements = data_array.shape[0]
     for start, stop in zip(range(0, num_elements-seq_length), range(seq_length, num_elements)):
@@ -124,7 +121,6 @@ seq_gen = (list(gen_sequence(train_df[train_df['id']==id], sequence_length, sequ
 # generate sequences and convert to numpy array
 seq_array = np.concatenate(list(seq_gen)).astype(np.float32)
 seq_array.shape
-
 
 # function to generate labels
 def gen_labels(id_df, seq_length, label):
@@ -167,11 +163,9 @@ model.fit(seq_array, label_array, epochs=10, batch_size=200, validation_split=0.
 end = time.time()
 print(end - start)
 
-
 # training metrics
 scores = model.evaluate(seq_array, label_array, verbose=1, batch_size=200)
 print('Accurracy: {}'.format(scores[1]))
-
 
 # make predictions and compute confusion matrix
 y_pred = model.predict_classes(seq_array,verbose=1, batch_size=200)
@@ -210,7 +204,6 @@ y_true_test = label_array_test_last
 print('Confusion matrix\n- x-axis is true labels.\n- y-axis is predicted labels')
 cm = confusion_matrix(y_true_test, y_pred_test)
 cm
-
 
 # compute precision and recall
 precision_test = precision_score(y_true_test, y_pred_test)
