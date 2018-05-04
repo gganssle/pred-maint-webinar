@@ -32,43 +32,45 @@ seq_array = np.concatenate(list(seq_gen)).astype(np.float32)
 label_array = np.concatenate(label_gen).astype(np.float32)
 
 
-
 ################################################################################
 
 ftrs = seq_array.shape[2]
 batch_size = 20
 
 class simplelstm():
-    def __init__(self, batch_size=batch_size, lstm_size=ftrs):
+    def __init__(self, batch_size=batch_size, lstm1_size=100, lstm2_size=50):
         super(simplelstm, self).__init__()
-        self.lstm_size = lstm_size
-        self.hidden_state1 = tf.zeros([sequence_length, lstm_size], dtype='float32')
-        self.current_state1 = tf.zeros([sequence_length, lstm_size], dtype='float32')
+        self.lstm1_size = lstm1_size
+        self.lstm2_size = lstm2_size
+
+        self.hidden_state1 = tf.zeros([sequence_length, lstm1_size], dtype='float32')
+        self.current_state1 = tf.zeros([sequence_length, lstm1_size], dtype='float32')
         self.state1 = self.hidden_state1, self.current_state1
-        self.hidden_state2 = tf.zeros([sequence_length, lstm_size], dtype='float32')
-        self.current_state2 = tf.zeros([sequence_length, lstm_size], dtype='float32')
+
+        self.hidden_state2 = tf.zeros([sequence_length, lstm2_size], dtype='float32')
+        self.current_state2 = tf.zeros([sequence_length, lstm2_size], dtype='float32')
         self.state2 = self.hidden_state2, self.current_state2
 
     def forward(self, inpt):
-        network = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
+        network = tf.nn.rnn_cell.LSTMCell(self.lstm1_size)
         network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=0.2)
-        network = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
+        network = tf.nn.rnn_cell.LSTMCell(self.lstm2_size)
         network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=0.2)
-        output = tf.nn.dynamic_rnn(network, inpt, dtype=tf.float32)
+        output, lstm_state = tf.nn.dynamic_rnn(network, inpt, dtype=tf.float32)
+        print(output.shape)
 
-        #output = tf.layers.dense(inputs=output, units=2, activation=None)
-        output = tf.contrib.layers.fully_connected(output, num_outputs=2, activation_fn=None)
+        output = tf.layers.dense(inputs=output, units=2, activation=None)
         output = tf.contrib.layers.softmax(output)
 
-        return output
+        return output, lstm_state
 
 model = simplelstm()
 
 seq_array.shape
 samples = tf.constant(seq_array[0:batch_size], dtype='float32') # this is the batching operation
 samples.shape
-output = model.forward(samples)
-output
+output, state = model.forward(samples)
+output.shape
 
 
 
