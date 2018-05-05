@@ -1,8 +1,10 @@
 import time
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import animation
+
+from tqdm import tqdm, trange
+
+from sklearn.preprocessing import OneHotEncoder
 
 import tensorflow as tf
 tf.enable_eager_execution()
@@ -29,13 +31,10 @@ label_gen = [seq.gen_labels(train_df[train_df['id']==id], sequence_length, ['lab
 
 # generate sequences
 seq_array = np.concatenate(list(seq_gen)).astype(np.float32)
-label_array = np.concatenate(label_gen).astype(np.float32)
+label_array = np.concatenate(label_gen).astype(np.int32)
 
-
-################################################################################
-
-ftrs = seq_array.shape[2]
-batch_size = 20
+# build model
+batch_size = 15631
 
 class simplelstm():
     def __init__(self, batch_size=batch_size, lstm1_size=100, lstm2_size=50):
@@ -43,137 +42,62 @@ class simplelstm():
         self.lstm1_size = lstm1_size
         self.lstm2_size = lstm2_size
 
-        self.hidden_state1 = tf.zeros([sequence_length, lstm1_size], dtype='float32')
-        self.current_state1 = tf.zeros([sequence_length, lstm1_size], dtype='float32')
-        self.state1 = self.hidden_state1, self.current_state1
-
-        self.hidden_state2 = tf.zeros([sequence_length, lstm2_size], dtype='float32')
-        self.current_state2 = tf.zeros([sequence_length, lstm2_size], dtype='float32')
-        self.state2 = self.hidden_state2, self.current_state2
-
     def forward(self, inpt):
         network = tf.nn.rnn_cell.LSTMCell(self.lstm1_size)
         network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=0.2)
         network = tf.nn.rnn_cell.LSTMCell(self.lstm2_size)
         network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=0.2)
         output, lstm_state = tf.nn.dynamic_rnn(network, inpt, dtype=tf.float32)
-        print(output.shape)
 
-        output = tf.layers.dense(inputs=output, units=2, activation=None)
+        output = tf.layers.dense(inputs=lstm_state.h, units=2, activation=None)
         output = tf.contrib.layers.softmax(output)
 
         return output, lstm_state
 
+# instantiate model and optimizer
 model = simplelstm()
+optim = tf.train.AdamOptimizer(learning_rate=0.001)
 
-seq_array.shape
+# one hot encoding
+enc = OneHotEncoder()
+
+labels = enc.fit_transform(label_array).todense()
+
+# batching
+samples = tf.constant(seq_array[0:batch_size], dtype='float32')
+labels = tf.constant(label_array[0:batch_size], dtype='float32')
+
+# loss fn
+def loss_fn(model, labels, samples):
+    pred, state = model.forward(samples)
+    loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=pred)
+    return loss, state
+
+# gradient tape
+def grad(model, samples, labels):
+  with tf.GradientTape() as tape:
+    loss, state = loss_fn(model, labels, samples)
+  return tape.gradient(loss, state)
+
+grad(model, samples, labels)
+
+# train
+epochs = 1
+
+for _ in trange(epochs):
+    #pred, state = model.forward(samples)
+    #optim.minimize(lambda: loss_fn(model, labels, pred))
+
+    grads = grad(model, samples, labels)
+    optim.minimize(lambda: grad(model, samples, labels) )
+
+
+
+
+
+
+
 samples = tf.constant(seq_array[0:batch_size], dtype='float32') # this is the batching operation
 samples.shape
 output, state = model.forward(samples)
 output.shape
-
-
-
-
-################################################################################
-
-
-class simplelstm():
-    def __init__(self, batch_size=2, lstm_size=200):
-        super(simplelstm, self).__init__()
-        self.hidden_state1 = tf.zeros([batch_size, lstm_size], dtype='float32')
-        self.current_state1 = tf.zeros([batch_size, lstm_size], dtype='float32')
-        self.state1 = self.hidden_state1, self.current_state1
-        self.hidden_state2 = tf.zeros([batch_size, lstm_size], dtype='float32')
-        self.current_state2 = tf.zeros([batch_size, lstm_size], dtype='float32')
-        self.state2 = self.hidden_state2, self.current_state2
-
-        self.lstm1 = tf.nn.rnn_cell.LSTMCell(lstm_size)
-        self.lstm2 = tf.nn.rnn_cell.LSTMCell(lstm_size)
-
-    def forward(self, inpt):
-        output, _ = self.lstm1(inpt, self.state1)
-        output = tf.nn.dropout(output, keep_prob=0.2)
-        output, _ = self.lstm2(output, self.state2)
-        output = tf.nn.dropout(output, keep_prob=0.2)
-        output = tf.contrib.layers.fully_connected(output, num_outputs=2, activation_fn=None)
-        output = tf.contrib.layers.softmax(output)
-
-        return output
-
-testin = tf.constant(-1, shape=(50,25), dtype='float32')
-samples = testin[0:batch_size] # this is the batching operation
-samples.shape
-model = simplelstm()
-output = model.forward(samples)
-output
-
-
-################################################################################
-
-
-
-class simplelstm():
-    def __init__(self, batch_size=2, lstm_size=2):
-        super(simplelstm, self).__init__()
-        self.hidden_state = tf.zeros([1, lstm_size], dtype='float32')
-        self.current_state = tf.zeros([1, lstm_size], dtype='float32')
-        self.state1 = self.hidden_state, self.current_state
-        self.state2 = self.hidden_state, self.current_state
-
-        self.lstm1 = tf.nn.rnn_cell.LSTMCell(lstm_size)
-        self.lstm2 = tf.nn.rnn_cell.LSTMCell(lstm_size)
-
-    def forward(self, inpt):
-        output, _ = self.lstm1(inpt, self.state1)
-        output = tf.nn.dropout(output, keep_prob=0.2)
-        output, _ = self.lstm2(output, self.state2)
-        output = tf.nn.dropout(output, keep_prob=0.2)
-        output = tf.contrib.layers.fully_connected(output, num_outputs=2, activation_fn=None)
-        output = tf.contrib.layers.softmax(output)
-
-        return output
-
-testin = tf.constant(-1, shape=(4,2), dtype='float32')
-onesample = testin[1]
-model = simplelstm()
-output = model.forward(tf.reshape(onesample, shape=[1, onesample.shape[0]]))
-output
-
-
-################################################################################
-class simplelstm():
-    def __init__(self, batch_size=2, lstm_size=2):
-        super(simplelstm, self).__init__()
-        hidden_state = tf.zeros([1, lstm_size], dtype='float32')
-        current_state = tf.zeros([1, lstm_size], dtype='float32')
-        state = hidden_state, current_state
-        lstm1 = tf.nn.rnn_cell.LSTMCell(lstm_size)
-
-    def forward(self, inpt):
-        output, ostate = lstm(inpt, state)
-        return output, ostate
-
-testin = tf.constant(-1, shape=(4,2), dtype='float32')
-onesample = testin[1]
-model = simplelstm()
-output, ostate = model.forward(tf.reshape(onesample, shape=[1, onesample.shape[0]]))
-output
-ostate
-
-
-################################################################################
-
-
-batch_size = 2
-lstm = tf.nn.rnn_cell.LSTMCell(2)
-lstm.state_size
-hidden_state = tf.zeros([1,2], dtype='float32')
-current_state = tf.zeros([1,2], dtype='float32')
-state = hidden_state, current_state
-inpt = tf.constant(-1, shape=(1,2), dtype='float32')
-output, ostate = lstm(inpt, state)
-
-output
-
-ostate
