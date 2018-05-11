@@ -89,7 +89,7 @@ for _ in trange(epochs):
     #optim.minimize(lambda: loss_fn(model, labels, pred))
 
     grads = grad(model, samples, labels)
-    optim.minimize(lambda: grad(model, samples, labels) )
+    optim.minimize(lambda: grad(model, samples, labels))
 
 
 
