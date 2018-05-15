@@ -1,6 +1,10 @@
 import time
+import os
+
 import pandas as pd
 import numpy as np
+
+import functools
 
 from tqdm import tqdm, trange
 
@@ -42,11 +46,16 @@ class simplelstm():
         self.lstm1_size = lstm1_size
         self.lstm2_size = lstm2_size
 
-    def forward(self, inpt):
+    def forward(self, inpt, train):
+        if train:
+            prob = 0.2
+        else:
+            prob = 1
+
         network = tf.nn.rnn_cell.LSTMCell(self.lstm1_size)
-        network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=0.2)
+        network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=prob)
         network = tf.nn.rnn_cell.LSTMCell(self.lstm2_size)
-        network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=0.2)
+        network = tf.contrib.rnn.DropoutWrapper(network, output_keep_prob=prob)
         output, lstm_state = tf.nn.dynamic_rnn(network, inpt, dtype=tf.float32)
 
         output = tf.layers.dense(inputs=lstm_state.h, units=2, activation=None)
@@ -69,35 +78,46 @@ labels = tf.constant(label_array[0:batch_size], dtype='float32')
 
 # loss fn
 def loss_fn(model, labels, samples):
-    pred, state = model.forward(samples)
+    samples = tf.constant(seq_array[0:batch_size], dtype='float32') # vsh
+    labels = tf.constant(label_array[0:batch_size], dtype='float32') # vsh
+    # above, vsh stands for very shitty hack. Shwhy does functools.partial
+    # destroy tensor shape?
+
+    pred, _ = model.forward(samples, train=True)
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=pred)
-    return loss, state
+    return loss
 
 # gradient tape
-def grad(model, samples, labels):
-  with tf.GradientTape() as tape:
-    loss, state = loss_fn(model, labels, samples)
-  return tape.gradient(loss, state)
+#def grad(model, samples, labels):
+#  with tf.GradientTape() as tape:
+#    loss, state = loss_fn(model, labels, samples)
+#  return tape.gradient(loss, state)
 
-grad(model, samples, labels)
+#grad(model, samples, labels)
+
+# output accuracy of untrained model on train data
+correct = 0
+for i in trange(100):
+    if model.forward(tf.expand_dims(samples[1], axis=0), train=False) == labels[i]:
+        correct += 1
+print('percent corect guesses:', 100 * correct/1000, '%\n')
 
 # train
 epochs = 1
 
-for _ in trange(epochs):
-    #pred, state = model.forward(samples)
-    #optim.minimize(lambda: loss_fn(model, labels, pred))
+for epoch in trange(epochs):
+    func_loss = functools.partial(loss_fn, model, samples, labels)
+    optim.minimize(func_loss)
 
-    grads = grad(model, samples, labels)
-    optim.minimize(lambda: grad(model, samples, labels))
+# output "accuracy" of trained model on train data
+correct = 0
+for i in trange(100):
+    if model.forward(tf.expand_dims(samples[1], axis=0), train=False) == labels[i]:
+        correct += 1
+print('percent corect guesses:', 100 * correct/1000, '%\n')
 
 
-
-
-
-
-
-samples = tf.constant(seq_array[0:batch_size], dtype='float32') # this is the batching operation
-samples.shape
-output, state = model.forward(samples)
-output.shape
+checkpoint_dir = '../dat/checkpoints/'
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+root = tf.Checkpoint(model=model)
+root.save(file_prefix=checkpoint_prefix)
